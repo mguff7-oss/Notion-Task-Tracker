@@ -1,0 +1,230 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Current Task</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            width: 100vw;
+            height: 100vh;
+            overflow: hidden;
+            background-color: #ffffff;
+            font-family: 'Georgia', 'Garamond', serif;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        #container {
+            text-align: center;
+            padding: 2rem;
+        }
+        .task-name {
+            font-size: 28px;
+            font-weight: 400;
+            font-style: italic;
+            color: #000000;
+            margin: 0 0 1.5rem 0;
+            letter-spacing: -0.3px;
+            min-height: 40px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .task-time {
+            font-size: 48px;
+            font-weight: 300;
+            font-style: italic;
+            color: #000000;
+            margin: 0;
+            letter-spacing: -1px;
+            font-family: 'Courier New', monospace;
+        }
+        .no-task {
+            font-size: 16px;
+            font-style: italic;
+            color: #999999;
+            text-align: center;
+        }
+        .divider {
+            width: 40px;
+            height: 1px;
+            background-color: #999999;
+            margin: 1rem auto;
+            opacity: 0.5;
+        }
+        .button-group {
+            display: flex;
+            gap: 0.5rem;
+            justify-content: center;
+            margin: 1rem 0;
+        }
+        .btn {
+            padding: 0.5rem 1rem;
+            background-color: #000000;
+            color: #ffffff;
+            border: none;
+            font-family: 'Georgia', 'Garamond', serif;
+            font-style: italic;
+            font-size: 14px;
+            cursor: pointer;
+            border-radius: 4px;
+            transition: background-color 0.2s;
+        }
+        .btn:hover {
+            background-color: #333333;
+        }
+        .next-task-preview {
+            font-size: 12px;
+            font-style: italic;
+            color: #999999;
+            margin: 0.5rem 0 0 0;
+            line-height: 1.4;
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div class="no-task">Loading...</div>
+    </div>
+
+    <script>
+        const serverUrl = 'https://notion-task-tracker-wheat.vercel.app';
+        const databaseId = '7674b4a06f864c7580a5bb15bd6f7b0e';
+        let elapsedMs = 0;
+        let currentTaskId = null;
+
+        function formatTime(ms) {
+            const totalSeconds = Math.floor(ms / 1000);
+            const hours = Math.floor(totalSeconds / 3600);
+            const minutes = Math.floor((totalSeconds % 3600) / 60);
+            const seconds = totalSeconds % 60;
+
+            if (hours > 0) {
+                return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+            return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function render(task, elapsed, nextTask) {
+            const container = document.getElementById('container');
+            
+            if (!task) {
+                container.innerHTML = '<div class="no-task">No active task</div>';
+                return;
+            }
+
+            let nextTaskHtml = '';
+            if (nextTask) {
+                nextTaskHtml = `<p class="next-task-preview">Next: ${nextTask.name}</p>`;
+            }
+
+            container.innerHTML = `
+                <p class="task-name">${task.name}</p>
+                <div class="divider"></div>
+                <p class="task-time">${formatTime(elapsed)}</p>
+                <div class="button-group">
+                    <button id="finish-btn" class="btn">Finish</button>
+                    <button id="next-btn" class="btn">Next Task</button>
+                </div>
+                ${nextTaskHtml}
+            `;
+
+            // Attach button handlers
+            document.getElementById('finish-btn').onclick = finishTask;
+            document.getElementById('next-btn').onclick = goToNextTask;
+        }
+
+        async function finishTask() {
+            try {
+                const res = await fetch(`${serverUrl}/finish-task`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                });
+                if (res.ok) {
+                    fetchTask();
+                }
+            } catch (err) {
+                console.error('Error finishing task:', err);
+            }
+        }
+
+        async function goToNextTask() {
+            try {
+                // First get the next task
+                const getRes = await fetch(`${serverUrl}/get-next-task`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ databaseId }),
+                });
+                const getData = await getRes.json();
+
+                if (!getData.nextTask) {
+                    alert('No more tasks for today');
+                    return;
+                }
+
+                // Then set it as current
+                const setRes = await fetch(`${serverUrl}/set-next-task`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ nextTaskId: getData.nextTask.id }),
+                });
+
+                if (setRes.ok) {
+                    fetchTask();
+                }
+            } catch (err) {
+                console.error('Error setting next task:', err);
+            }
+        }
+
+        async function fetchTask() {
+            try {
+                const res = await fetch(`${serverUrl}/current-task`);
+                const data = await res.json();
+                
+                if (data.task) {
+                    currentTaskId = data.task.id;
+                    elapsedMs = data.elapsedMs;
+
+                    // Get next task preview
+                    const nextRes = await fetch(`${serverUrl}/get-next-task`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ databaseId }),
+                    });
+                    const nextData = await nextRes.json();
+                    
+                    render(data.task, elapsedMs, nextData.nextTask);
+                } else {
+                    render(null, 0, null);
+                }
+            } catch (err) {
+                document.getElementById('container').innerHTML = `<div class="no-task">Error: ${err.message}</div>`;
+            }
+        }
+
+        // Fetch on load
+        fetchTask();
+
+        // Fetch every 5 seconds
+        setInterval(fetchTask, 5000);
+
+        // Update timer every second
+        setInterval(() => {
+            elapsedMs += 1000;
+            const container = document.getElementById('container');
+            const timeEl = container.querySelector('.task-time');
+            if (timeEl) {
+                timeEl.textContent = formatTime(elapsedMs);
+            }
+        }, 1000);
+    </script>
+</body>
+</html>

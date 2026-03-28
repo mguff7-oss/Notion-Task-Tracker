@@ -104,6 +104,147 @@ app.get('/current-task', async (req, res) => {
   }
 });
 
+// Finish current task (check Done, uncheck current-task)
+app.post('/finish-task', async (req, res) => {
+  try {
+    if (!currentTask) {
+      return res.status(400).json({ error: 'No current task' });
+    }
+
+    // Check Done checkbox and uncheck current-task
+    await notion.pages.update({
+      page_id: currentTask,
+      properties: {
+        'Done': { checkbox: true },
+        'current-task': { checkbox: false },
+      },
+    });
+
+    // Save time before clearing
+    if (taskStartTime) {
+      await saveTaskTime(currentTask, taskStartTime);
+    }
+
+    // Clear current task
+    currentTask = null;
+    taskStartTime = null;
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error finishing task:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Get next task in queue
+app.post('/get-next-task', async (req, res) => {
+  try {
+    if (!currentTask) {
+      return res.json({ nextTask: null });
+    }
+
+    const { databaseId } = req.body;
+    const currentPage = await notion.pages.retrieve({ page_id: currentTask });
+    const currentDay = currentPage.properties['Day']?.date?.start;
+
+    if (!currentDay || !databaseId) {
+      return res.json({ nextTask: null });
+    }
+
+    // Query for next task
+    const results = await notion.databases.query({
+      database_id: databaseId,
+      filter: {
+        and: [
+          {
+            property: 'Day',
+            date: {
+              equals: currentDay,
+            },
+          },
+          {
+            property: 'Done',
+            checkbox: {
+              equals: false,
+            },
+          },
+          {
+            property: 'current-task',
+            checkbox: {
+              equals: false,
+            },
+          },
+        ],
+      },
+      sorts: [
+        {
+          property: 'Container',
+          direction: 'ascending',
+        },
+        {
+          property: 'Action Item',
+          direction: 'ascending',
+        },
+      ],
+    });
+
+    if (results.results.length === 0) {
+      return res.json({ nextTask: null });
+    }
+
+    const nextPage = results.results[0];
+    const nextTaskName = nextPage.properties['Action Item']?.title?.[0]?.plain_text || 'Untitled';
+
+    res.json({
+      nextTask: {
+        id: nextPage.id,
+        name: nextTaskName,
+      },
+    });
+  } catch (err) {
+    console.error('Error getting next task:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
+// Set next task (uncheck current, check next's current-task)
+app.post('/set-next-task', async (req, res) => {
+  try {
+    const { nextTaskId } = req.body;
+
+    if (!nextTaskId) {
+      return res.status(400).json({ error: 'No nextTaskId provided' });
+    }
+
+    // Uncheck current task
+    if (currentTask) {
+      await notion.pages.update({
+        page_id: currentTask,
+        properties: {
+          'current-task': { checkbox: false },
+        },
+      });
+    }
+
+    // Check next task
+    await notion.pages.update({
+      page_id: nextTaskId,
+      properties: {
+        'current-task': { checkbox: true },
+      },
+    });
+
+    // Update current task
+    currentTask = nextTaskId;
+    taskStartTime = Date.now();
+
+    res.json({ ok: true });
+  } catch (err) {
+    console.error('Error setting next task:', err);
+    res.status(500).json({ error: err.message });
+  }
+});
+
 // Helper: save time spent to Notion
 async function saveTaskTime(pageId, startTime) {
   try {
