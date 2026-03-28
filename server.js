@@ -140,14 +140,19 @@ app.post('/finish-task', async (req, res) => {
 app.post('/get-next-task', async (req, res) => {
   try {
     if (!currentTask) {
+      console.log('No current task set');
       return res.json({ nextTask: null });
     }
 
     const { databaseId } = req.body;
+    console.log('Getting next task - databaseId:', databaseId);
+    
     const currentPage = await notion.pages.retrieve({ page_id: currentTask });
     const currentDay = currentPage.properties['Day']?.date?.start;
+    console.log('Current day:', currentDay);
 
     if (!currentDay || !databaseId) {
+      console.log('Missing currentDay or databaseId');
       return res.json({ nextTask: null });
     }
 
@@ -188,7 +193,10 @@ app.post('/get-next-task', async (req, res) => {
       ],
     });
 
+    console.log('Query results count:', results.results.length);
+
     if (results.results.length === 0) {
+      console.log('No tasks found matching criteria');
       return res.json({ nextTask: null });
     }
 
