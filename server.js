@@ -18,8 +18,9 @@ app.post('/webhook', async (req, res) => {
 
     // Notion sends a verification request on webhook setup
     if (event.type === 'ping') {
-      return res.json({ ok: true });
-    }
+  console.log('Received ping from Notion');
+  res.status(200).json({ type: 'ping' });
+}
 
     // Handle page updates
     if (event.type === 'page_updated' && event.object.type === 'page') {
