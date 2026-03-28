@@ -16,11 +16,12 @@ let verificationToken = null;
 app.post('/webhook', async (req, res) => {
   try {
     const event = req.body;
+    console.log('Received request:', JSON.stringify(event, null, 2));
 
     // Notion sends a verification request on webhook setup
     if (event.type === 'ping') {
-      verificationToken = req.body.verification_token;
-      console.log('Received verification token:', verificationToken);
+      verificationToken = event.verification_token;
+      console.log('Stored verification token:', verificationToken);
       return res.status(200).json({ verification_token: verificationToken });
     }
 
