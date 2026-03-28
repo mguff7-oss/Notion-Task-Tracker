@@ -18,9 +18,9 @@ app.post('/webhook', async (req, res) => {
 
     // Notion sends a verification request on webhook setup
     if (event.type === 'ping') {
-      const challenge = req.body.challenge;
-      console.log('Received verification challenge:', challenge);
-      return res.status(200).json({ challenge });
+      const verificationToken = req.body.verification_token || req.body.challenge;
+      console.log('Verification token from Notion:', verificationToken);
+      return res.status(200).json({ verification_token: verificationToken });
     }
 
     // Handle page updates
