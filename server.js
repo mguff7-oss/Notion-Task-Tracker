@@ -32,8 +32,11 @@ app.post('/webhook', async (req, res) => {
       try {
         // Fetch the page to get current-task field
         const page = await notion.pages.retrieve({ page_id: pageId });
+        console.log('Page properties:', Object.keys(page.properties));
         const currentTaskField = page.properties['current-task'];
+        console.log('current-task field:', JSON.stringify(currentTaskField));
         const isCurrentTask = currentTaskField?.checkbox || false;
+        console.log('Is current task:', isCurrentTask);
 
         if (isCurrentTask && currentTask !== pageId) {
           // New task started - save old task's time if there was one
