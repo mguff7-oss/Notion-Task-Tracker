@@ -83,7 +83,7 @@ app.get('/current-task', async (req, res) => {
     }
 
     const page = await notion.pages.retrieve({ page_id: currentTask });
-    const titleField = page.properties.title || page.properties.Name;
+    const titleField = page.properties['Action Item'];
     const taskName = titleField?.title?.[0]?.plain_text || 'Untitled';
 
     const elapsedMs = taskStartTime ? Date.now() - taskStartTime : 0;
