@@ -10,6 +10,7 @@ const notion = new Client({ auth: process.env.NOTION_API_KEY });
 
 let currentTask = null;
 let taskStartTime = null;
+let verificationToken = null;
 
 // Receive webhook from Notion
 app.post('/webhook', async (req, res) => {
@@ -18,8 +19,8 @@ app.post('/webhook', async (req, res) => {
 
     // Notion sends a verification request on webhook setup
     if (event.type === 'ping') {
-      const verificationToken = req.body.verification_token || req.body.challenge;
-      console.log('Verification token from Notion:', verificationToken);
+      verificationToken = req.body.verification_token;
+      console.log('Received verification token:', verificationToken);
       return res.status(200).json({ verification_token: verificationToken });
     }
 
@@ -57,6 +58,15 @@ app.post('/webhook', async (req, res) => {
   } catch (error) {
     console.error('Webhook error:', error);
     res.status(500).json({ error: error.message });
+  }
+});
+
+// Get verification token
+app.get('/verification-token', (req, res) => {
+  if (verificationToken) {
+    res.json({ verification_token: verificationToken });
+  } else {
+    res.json({ verification_token: null, message: 'No token received yet' });
   }
 });
 
