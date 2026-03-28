@@ -25,33 +25,37 @@ app.post('/webhook', async (req, res) => {
       return res.status(200).json({ verification_token: verificationToken });
     }
 
-    // Handle page updates
-    if (event.type === 'page_updated' && event.object.type === 'page') {
-      const pageId = event.object.id;
+    // Handle page property updates
+    if (event.type === 'page.properties_updated') {
+      const pageId = event.entity.id;
+      
+      try {
+        // Fetch the page to get current-task field
+        const page = await notion.pages.retrieve({ page_id: pageId });
+        const currentTaskField = page.properties['current-task'];
+        const isCurrentTask = currentTaskField?.checkbox || false;
 
-      // Fetch the page to get current-task field
-      const page = await notion.pages.retrieve({ page_id: pageId });
+        if (isCurrentTask && currentTask !== pageId) {
+          // New task started - save old task's time if there was one
+          if (currentTask && taskStartTime) {
+            await saveTaskTime(currentTask, taskStartTime);
+          }
 
-      // Check if this page has current-task set to true
-      const currentTaskField = page.properties['current-task'];
-      const isCurrentTask = currentTaskField?.checkbox || false;
-
-      if (isCurrentTask && currentTask !== pageId) {
-        // New task started - save old task's time if there was one
-        if (currentTask && taskStartTime) {
-          await saveTaskTime(currentTask, taskStartTime);
+          // Update current task
+          currentTask = pageId;
+          taskStartTime = Date.now();
+          console.log('Current task set to:', pageId);
+        } else if (!isCurrentTask && currentTask === pageId) {
+          // Current task was unchecked
+          if (taskStartTime) {
+            await saveTaskTime(currentTask, taskStartTime);
+          }
+          currentTask = null;
+          taskStartTime = null;
+          console.log('Current task cleared');
         }
-
-        // Update current task
-        currentTask = pageId;
-        taskStartTime = Date.now();
-      } else if (!isCurrentTask && currentTask === pageId) {
-        // Current task was unchecked
-        if (taskStartTime) {
-          await saveTaskTime(currentTask, taskStartTime);
-        }
-        currentTask = null;
-        taskStartTime = null;
+      } catch (err) {
+        console.error('Error processing page update:', err);
       }
     }
 
